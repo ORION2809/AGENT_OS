@@ -74,6 +74,41 @@ the encrypted-DB work starts): whether `sqlite-vec` operates cleanly against a
 SQLCipher-encrypted connection without an unencrypted export step. This wasn't
 blocking for schema/decomposer design and was deferred.
 
+## 3. Android-specific: sqlite-vec via requery/sqlite-android + Room
+
+Not one of Vision.md's original two verification items, but a risk discovered while
+scaffolding the Android project: **Android's stock SQLite has extension loading
+compiled out**, so the desktop finding above doesn't automatically carry over to a
+real device. Resolved and verified hands-on rather than assumed:
+
+- Backend: `com.github.requery:sqlite-android:3.49.0`, wired into Room via
+  `RequerySQLiteOpenHelperFactory`'s `ConfigurationOptions` hook
+  (`app/src/main/java/com/mobileai/core/data/AppDatabase.kt`).
+- Prebuilt `sqlite-vec` v0.1.9 loadable extensions bundled per-ABI in
+  `app/src/main/jniLibs/{arm64-v8a,x86_64}/libvec0.so`, registered via
+  `SQLiteCustomExtension` at connection-open time (native `sqlite3_load_extension`,
+  not the gated SQL-level `load_extension()` function -- no runtime "not authorized"
+  restriction hit).
+
+**Two real bugs found and fixed only by actually running this on the emulator**,
+not by reading docs:
+1. Assumed entry point `sqlite3_vec0_init` (basename-derived convention, same one
+   Python's `sqlite_vec.load()` relies on implicitly). Failed at runtime with
+   `undefined symbol: sqlite3_vec0_init`. `llvm-nm -D libvec0.so` showed the real
+   exported symbol is `sqlite3_vec_init` -- the file is named vec0.so but registers
+   internally as "vec", not "vec0". Fixed by passing the entry point explicitly
+   instead of relying on auto-detection.
+2. Room defaults a column's name to the literal Kotlin property name
+   (`eventId`) unless `@ColumnInfo(name = ...)` overrides it -- it does not
+   snake_case automatically. The raw joined SQL in `EmbeddingStore.kt` referenced
+   `event_id`/`contact_id`, causing `no such column: e.event_id` until the missing
+   `@ColumnInfo` annotations were added to both entities' primary keys.
+
+**Result, on the Aqua_API35 x86_64 emulator**: PASS, and the returned distances
+(`0.02645754...`, `1.29811406...`, `1.30426228...`) match the desktop Python test
+in `research/sqlite-vec-verify/` exactly -- confirming numerical parity between
+the two `sqlite-vec` builds, not just "it ran without crashing."
+
 ## Model lock-in decision
 
 **Qwen2.5-1.5B-Instruct-GGUF (Q4_K_M) is confirmed usable** for the reasoning LLM

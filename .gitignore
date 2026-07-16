@@ -6,7 +6,13 @@ research/eval-harness/last_run_results.json
 __pycache__/
 .gradle/
 build/
+app/.cxx/
+app/build/
 local.properties
 *.iml
 .idea/
 .claude/
+research/sqlite-vec-android/arm64/
+research/sqlite-vec-android/x86_64/
+*.tar.gz
+third_party/llama.cpp/
