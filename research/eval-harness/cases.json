@@ -1,0 +1,52 @@
+[
+  {
+    "id": "flight_alarm_basic",
+    "utterance": "Wake me an hour before I have to leave for my 8:30 flight tomorrow, accounting for 45 minutes of travel time and needing to arrive 2 hours early.",
+    "expect": {
+      "goal": "CREATE_ALARM",
+      "slots_present": ["event_reference", "temporal_expression", "numeric_constraints"],
+      "numeric_constraints_count": 3
+    },
+    "source": "Vision.md section 4 worked example"
+  },
+  {
+    "id": "reminder_with_topic_reference",
+    "utterance": "Remind me before that meeting with Rahul to bring the document we discussed yesterday",
+    "expect": {
+      "goal": "CREATE_REMINDER",
+      "slots_present": ["person_reference", "event_reference", "topic_reference"],
+      "numeric_constraints_count": 0
+    },
+    "source": "Vision.md section 4 complex-command example (query decomposer 'crux' case)"
+  },
+  {
+    "id": "simple_alarm_no_retrieval",
+    "utterance": "Wake me at seven tomorrow",
+    "expect": {
+      "goal": "CREATE_ALARM",
+      "slots_present": ["temporal_expression"],
+      "numeric_constraints_count": 0
+    },
+    "source": "Vision.md section 4 simple-command example"
+  },
+  {
+    "id": "out_of_scope_query",
+    "utterance": "What's the weather like today",
+    "expect": {
+      "goal": "QUERY_INFO",
+      "slots_present": [],
+      "numeric_constraints_count": 0
+    },
+    "source": "negative case: not an action -- catches false-positive action creation"
+  },
+  {
+    "id": "send_message_basic",
+    "utterance": "Tell Priya I'll be 10 minutes late",
+    "expect": {
+      "goal": "SEND_MESSAGE",
+      "slots_present": ["person_reference", "message_body"],
+      "numeric_constraints_count": 0
+    },
+    "source": "negative case for CREATE_REMINDER over-triggering"
+  }
+]

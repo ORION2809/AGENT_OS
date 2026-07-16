@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "structured_action_plan.v1.schema.json",
+  "title": "StructuredActionPlan",
+  "description": "v1. Output contract for the Reasoning LLM's second inference pass (vision.md section 4/5). This is the ONLY channel between the LLM and the deterministic engines -- every field here must be resolvable by a deterministic engine (temporal reasoning, contact resolution, etc.) without further LLM judgment calls. Grammar-constrained via GBNF derived from this schema (see research/llama-verify).",
+  "type": "object",
+  "required": ["schema_version", "goal", "confidence", "slots"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "goal": {
+      "description": "The single top-level action the assistant intends to take. Closed enum -- the Action Validator (vision.md section 3) dispatches on this value, so it can never be free text.",
+      "type": "string",
+      "enum": [
+        "CREATE_ALARM",
+        "CREATE_REMINDER",
+        "CREATE_CALENDAR_EVENT",
+        "SEND_MESSAGE",
+        "QUERY_INFO",
+        "NO_ACTION"
+      ]
+    },
+    "confidence": {
+      "description": "LLM's self-reported confidence that `goal` and `slots` correctly capture the user's intent. Deterministic Validation (section 3) uses a threshold below which it asks for clarification instead of acting -- separate from the retrieval relevance/confidence filter in open question 7.3, which gates context injection rather than final-plan execution.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "slots": {
+      "description": "Typed, structured fields extracted from the utterance plus any retrieved memory context. This is where 'NER becomes a schema-constraint problem' (vision.md section 8) -- every reference type gets an explicit typed slot instead of a free-text span.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "person_reference": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["raw_text"],
+          "properties": {
+            "raw_text": { "type": "string", "description": "Verbatim span, e.g. 'Rahul'. Entity linking (7.2) resolves this to a contact_id downstream -- the LLM never emits a contact_id itself." }
+          }
+        },
+        "event_reference": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["raw_text"],
+          "properties": {
+            "raw_text": { "type": "string", "description": "Verbatim span, e.g. 'that meeting'." },
+            "fuzzy_time_hint": { "type": ["string", "null"], "description": "e.g. 'yesterday', 'this Friday' -- resolved by the temporal engine, not computed here." }
+          }
+        },
+        "topic_reference": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["raw_text"],
+          "properties": {
+            "raw_text": { "type": "string", "description": "e.g. 'the document we discussed' -- routed to vector memory search, never resolved by the LLM directly." }
+          }
+        },
+        "temporal_expression": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["raw_text"],
+          "properties": {
+            "raw_text": { "type": "string", "description": "e.g. 'tomorrow at 8:30', 'an hour before'. The LLM extracts the span; it does NOT compute the resolved datetime -- that's the Temporal Reasoning Engine's job (section 2)." }
+          }
+        },
+        "numeric_constraints": {
+          "description": "Real utterances routinely carry more than one simultaneously (vision.md section 2's own example has three: arrive_before, travel_duration, wake_before_departure) -- must be an array, not a single slot.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "value", "unit"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["offset_before", "offset_after", "duration", "buffer"]
+              },
+              "value": { "type": "number" },
+              "unit": { "type": "string", "enum": ["minutes", "hours", "days"] }
+            }
+          }
+        },
+        "message_body": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "retrieved_context_used": {
+      "description": "Which memory records (if any) the reasoning pass actually relied on. Lets the Action Validator and eval harness (7.8) trace whether a wrong action came from bad retrieval vs. bad reasoning.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "record_id"],
+        "additionalProperties": false,
+        "properties": {
+          "source": { "type": "string", "enum": ["sql", "vector"] },
+          "record_id": { "type": "string" }
+        }
+      }
+    },
+    "clarification_needed": {
+      "description": "Non-null iff the plan cannot be safely executed as-is (e.g. retrieval found nothing, per open question 7.7, or confidence is below threshold). When set, the Action Validator must surface this instead of dispatching `goal`.",
+      "type": ["string", "null"]
+    }
+  }
+}
